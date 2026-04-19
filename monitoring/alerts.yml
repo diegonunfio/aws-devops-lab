@@ -1,0 +1,63 @@
+groups:
+  - name: aws-devops-lab-api
+    interval: 30s
+    rules:
+      - alert: APIDown
+        expr: up{job="aws-devops-lab-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team:     diegonunfio
+        annotations:
+          summary:     "aws-devops-lab-api is DOWN"
+          description: "Prometheus cannot reach aws-devops-lab-api for > 1 minute."
+          runbook_url: "https://github.com/diegonunfio/aws-devops-lab/wiki/runbooks/api-down"
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team:     diegonunfio
+        annotations:
+          summary:     "High 5xx error rate"
+          description: "Error rate is {{ printf \"%.1f\" $value | humanizePercentage }} over the last 5 minutes."
+
+      - alert: HighP99Latency
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route)
+          ) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          team:     diegonunfio
+        annotations:
+          summary:     "High P99 latency on {{ $labels.route }}"
+          description: "P99 = {{ $value | humanizeDuration }} on {{ $labels.route }}."
+
+  - name: infrastructure
+    rules:
+      - alert: HighCPU
+        expr: 100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "High CPU on {{ $labels.instance }}"
+          description: "CPU usage {{ printf \"%.0f\" $value }}%."
+
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary:     "Memory critical on {{ $labels.instance }}"
+          description: "Memory usage {{ printf \"%.0f\" $value }}%."
