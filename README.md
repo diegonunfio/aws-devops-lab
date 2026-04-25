@@ -1,4 +1,4 @@
-# AWS DevOps Lab — CI/CD Pipeline Design for Cloud Deployments
+# AWS DevOps Lab - CI/CD Pipeline Design for Cloud Deployments
 
 This project was built to practice real-world DevOps workflows using tools commonly used by engineering teams.
 It focuses on automation, containerization, infrastructure as code, AWS-ready deployments, and monitoring.
