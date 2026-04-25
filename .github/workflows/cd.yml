@@ -1,6 +1,11 @@
-name: CD (Manual)
+name: CD — Simulated Deploy Pipeline
 
 on:
+  workflow_run:
+    workflows: ["CI — Build, Test & Push"]
+    branches: [main]
+    types: [completed]
+
   workflow_dispatch:
     inputs:
       environment:
@@ -12,81 +17,56 @@ on:
           - staging
           - production
 
-      image_tag:
-        description: Image tag to deploy
-        required: false
-        default: latest
-
-env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY: aws-devops-lab-api
-  ECS_SERVICE: aws-devops-lab-service
-  ECS_CLUSTER: aws-devops-lab-cluster
-  CONTAINER_NAME: api
-
 jobs:
+
   deploy-staging:
     name: Deploy → Staging
     runs-on: ubuntu-latest
-    if: github.event.inputs.environment == 'staging'
+
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deployment summary
+      - name: Simulate deployment
         run: |
-          echo "Simulated staging deployment"
-          echo "Repository: ${{ github.repository }}"
-          echo "Environment: staging"
-          echo "Image Tag: ${{ github.event.inputs.image_tag }}"
-          echo "Region: ${{ env.AWS_REGION }}"
-
-      - name: Simulate ECS deployment
-        run: |
-          echo "Connecting to ECS cluster..."
-          sleep 2
-          echo "Updating task definition..."
-          sleep 2
-          echo "Rolling deployment started..."
-          sleep 2
-          echo "Deployment completed successfully."
+          echo "Deploying latest version to STAGING..."
+          sleep 5
+          echo "Containers updated"
+          echo "Load balancer healthy"
 
       - name: Smoke test
         run: |
-          echo "Checking /health endpoint..."
-          sleep 2
+          echo "Testing /health endpoint..."
+          sleep 3
           echo "HTTP 200 OK"
+
+      - name: Success
+        run: echo "Staging deployment completed successfully"
 
   deploy-production:
     name: Deploy → Production
     runs-on: ubuntu-latest
-    if: github.event.inputs.environment == 'production'
+    needs: deploy-staging
+
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deployment summary
+      - name: Simulate production deploy
         run: |
-          echo "Simulated production deployment"
-          echo "Repository: ${{ github.repository }}"
-          echo "Environment: production"
-          echo "Image Tag: ${{ github.event.inputs.image_tag }}"
-          echo "Region: ${{ env.AWS_REGION }}"
-
-      - name: Simulate production rollout
-        run: |
-          echo "Starting rolling deployment..."
-          sleep 2
-          echo "Deploying new containers..."
-          sleep 2
-          echo "Waiting for service stability..."
-          sleep 2
-          echo "Production deployment successful."
+          echo "Deploying to PRODUCTION..."
+          sleep 5
+          echo "Rolling update completed"
 
       - name: Smoke test
         run: |
-          echo "Checking production /health endpoint..."
-          sleep 2
-          echo "HTTP 200 OK"
+          echo "Production /health check OK"
+
+      - name: Create release note
+        run: echo "Production deployment successful"
