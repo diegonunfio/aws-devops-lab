@@ -12,8 +12,7 @@
   "scripts": {
     "start":    "node src/index.js",
     "dev":      "nodemon src/index.js",
-    "test":     "jest --coverage --forceExit",
-    "test:ci":  "jest --coverage --forceExit --ci --reporters=default --reporters=jest-junit",
+    "test:ci": "jest --coverage --forceExit --ci",
     "lint":     "eslint src/ tests/",
     "lint:fix": "eslint src/ tests/ --fix"
   },

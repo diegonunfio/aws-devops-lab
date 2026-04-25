@@ -15,7 +15,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}   # diegonunfio/aws-devops-lab
 
 jobs:
-  # ────────────────────────────────────────────────────────────────────────────
+ 
   lint-and-test:
     name: Lint & Unit Tests
     runs-on: ubuntu-latest
@@ -52,16 +52,7 @@ jobs:
           name: coverage-report
           path: app/coverage/
           retention-days: 7
-
-      - name: Upload JUnit results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results
-          path: app/junit.xml
-          retention-days: 7
-
-  # ────────────────────────────────────────────────────────────────────────────
+          
   security-scan:
     name: Security Scan (Trivy)
     runs-on: ubuntu-latest
@@ -88,7 +79,6 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
-  # ────────────────────────────────────────────────────────────────────────────
   docker-build-push:
     name: Docker Build & Push
     runs-on: ubuntu-latest
