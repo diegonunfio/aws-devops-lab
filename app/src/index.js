@@ -9,7 +9,6 @@ const PORT = process.env.PORT || 3000;
 const VERSION = process.env.APP_VERSION || '1.0.0';
 const ENV = process.env.NODE_ENV || 'development';
 
-// ── Prometheus metrics ──────────────────────────────────────────────────────
 const register = new promClient.Registry();
 promClient.collectDefaultMetrics({ register });
 
@@ -28,11 +27,9 @@ const httpRequestTotal = new promClient.Counter({
 });
 register.registerMetric(httpRequestTotal);
 
-// ── Middleware ───────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(morgan(ENV === 'production' ? 'combined' : 'dev'));
 
-// Instrument every request with duration + counter
 app.use((req, res, next) => {
   const end = httpRequestDuration.startTimer();
   res.on('finish', () => {
@@ -47,7 +44,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Routes ───────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
@@ -59,7 +55,6 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/ready', (req, res) => {
-  // In a real service this would check DB connectivity, cache, etc.
   res.status(200).json({ status: 'ready' });
 });
 
@@ -89,33 +84,29 @@ app.get('/api/v1/items', (req, res) => {
   res.json({ items, total: items.length });
 });
 
-// 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Not Found', path: req.path });
 });
 
-// Global error handler
-app.use((err, req, res, _next) => {
+app.use((err, req, res) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-// ── Server startup ────────────────────────────────────────────────────────────
 const server = app.listen(PORT, () => {
   console.log(`[${ENV}] aws-devops-lab-api listening on :${PORT} — v${VERSION}`);
 });
 
-// Graceful shutdown: wait for in-flight requests before exiting
 const shutdown = (signal) => {
   console.log(`${signal} received — shutting down gracefully`);
   server.close(() => {
     console.log('HTTP server closed');
     process.exit(0);
   });
-  setTimeout(() => process.exit(1), 10_000); // hard kill after 10s
+  setTimeout(() => process.exit(1), 10_000); 
 };
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT',  () => shutdown('SIGINT'));
 
-module.exports = app; // exported for supertest
+module.exports = app; 
