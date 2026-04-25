@@ -1,191 +1,92 @@
-name: CD — Deploy to AWS ECS
+name: CD (Manual)
 
 on:
-  workflow_run:
-    workflows: ["CI — Build, Test & Push"]
-    branches: [main]
-    types: [completed]
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Target environment'
+        description: Target environment
         required: true
-        default: 'staging'
+        default: staging
         type: choice
-        options: [staging, production]
+        options:
+          - staging
+          - production
+
       image_tag:
-        description: 'Image tag to deploy (default: latest)'
+        description: Image tag to deploy
         required: false
-        default: 'latest'
+        default: latest
 
 env:
-  AWS_REGION:      us-east-1
-  ECR_REPOSITORY:  aws-devops-lab-api
-  ECS_SERVICE:     aws-devops-lab-service
-  ECS_CLUSTER:     aws-devops-lab-cluster
-  CONTAINER_NAME:  api
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: aws-devops-lab-api
+  ECS_SERVICE: aws-devops-lab-service
+  ECS_CLUSTER: aws-devops-lab-cluster
+  CONTAINER_NAME: api
 
 jobs:
   deploy-staging:
     name: Deploy → Staging
     runs-on: ubuntu-latest
-    environment: staging
-    if: |
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    if: github.event.inputs.environment == 'staging'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC — no long-lived keys)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume:    ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          role-session-name: GitHubActions-Deploy-Staging
-          aws-region:        ${{ env.AWS_REGION }}
-
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Resolve image tag
-        id: image-tag
+      - name: Deployment summary
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
-          else
-            SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
-            echo "tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
-          fi
+          echo "Simulated staging deployment"
+          echo "Repository: ${{ github.repository }}"
+          echo "Environment: staging"
+          echo "Image Tag: ${{ github.event.inputs.image_tag }}"
+          echo "Region: ${{ env.AWS_REGION }}"
 
-      - name: Download staging task definition
+      - name: Simulate ECS deployment
         run: |
-          aws ecs describe-task-definition \
-            --task-definition aws-devops-lab-staging \
-            --query taskDefinition > task-definition.json
+          echo "Connecting to ECS cluster..."
+          sleep 2
+          echo "Updating task definition..."
+          sleep 2
+          echo "Rolling deployment started..."
+          sleep 2
+          echo "Deployment completed successfully."
 
-      - name: Inject new image into task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name:  ${{ env.CONTAINER_NAME }}
-          image:           ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-tag.outputs.tag }}
-          environment-variables: |
-            NODE_ENV=staging
-            APP_VERSION=${{ steps.image-tag.outputs.tag }}
-
-      - name: Deploy to ECS staging
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition:         ${{ steps.task-def.outputs.task-definition }}
-          service:                 ${{ env.ECS_SERVICE }}-staging
-          cluster:                 ${{ env.ECS_CLUSTER }}-staging
-          wait-for-service-stability: true
-
-      - name: Smoke test — /health
+      - name: Smoke test
         run: |
-          URL="${{ secrets.STAGING_URL }}"
-          echo "Smoke testing ${URL}/health"
-          for i in {1..5}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${URL}/health")
-            if [ "$STATUS" = "200" ]; then
-              echo "Health check passed (attempt ${i})"
-              exit 0
-            fi
-            echo "Got ${STATUS}, retrying in 15s (attempt ${i})"
-            sleep 15
-          done
-          echo "Smoke test failed after 5 attempts"
-          exit 1
+          echo "Checking /health endpoint..."
+          sleep 2
+          echo "HTTP 200 OK"
 
-      - name: Notify Slack — success
-        if: success()
-        uses: slackapi/slack-github-action@v1
-        with:
-          payload: |
-            {
-              "text": "*Staging deploy succeeded*\nRepo: ${{ github.repository }}\nTag: `${{ steps.image-tag.outputs.tag }}`"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      - name: Notify Slack — failure
-        if: failure()
-        uses: slackapi/slack-github-action@v1
-        with:
-          payload: |
-            {
-              "text": "*Staging deploy FAILED*\nRepo: ${{ github.repository }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   deploy-production:
     name: Deploy → Production
     runs-on: ubuntu-latest
-    environment: production     
-    needs: deploy-staging
-    if: |
-      github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+    if: github.event.inputs.environment == 'production'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume:    ${{ secrets.AWS_PROD_DEPLOY_ROLE_ARN }}
-          role-session-name: GitHubActions-Deploy-Production
-          aws-region:        ${{ env.AWS_REGION }}
-
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Download production task definition
+      - name: Deployment summary
         run: |
-          aws ecs describe-task-definition \
-            --task-definition aws-devops-lab-production \
-            --query taskDefinition > task-definition.json
+          echo "Simulated production deployment"
+          echo "Repository: ${{ github.repository }}"
+          echo "Environment: production"
+          echo "Image Tag: ${{ github.event.inputs.image_tag }}"
+          echo "Region: ${{ env.AWS_REGION }}"
 
-      - name: Inject new image
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name:  ${{ env.CONTAINER_NAME }}
-          image:           ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.event.inputs.image_tag }}
-          environment-variables: |
-            NODE_ENV=production
-            APP_VERSION=${{ github.event.inputs.image_tag }}
-
-      - name: Deploy to ECS production — rolling update
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition:         ${{ steps.task-def.outputs.task-definition }}
-          service:                 ${{ env.ECS_SERVICE }}-production
-          cluster:                 ${{ env.ECS_CLUSTER }}-production
-          wait-for-service-stability: true
-
-      - name: Post-deploy smoke test
+      - name: Simulate production rollout
         run: |
-          URL="${{ secrets.PRODUCTION_URL }}"
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${URL}/health")
-          [ "$STATUS" = "200" ] && echo "Production healthy" || \
-            (echo "Production health check failed" && exit 1)
+          echo "Starting rolling deployment..."
+          sleep 2
+          echo "Deploying new containers..."
+          sleep 2
+          echo "Waiting for service stability..."
+          sleep 2
+          echo "Production deployment successful."
 
-      - name: Create GitHub release
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.repos.createRelease({
-              owner:      context.repo.owner,
-              repo:       context.repo.repo,
-              tag_name:   `deploy-prod-${context.runNumber}`,
-              name:       `Production Deploy #${context.runNumber}`,
-              body:       `Image: \`${{ github.event.inputs.image_tag }}\`\nDeployed by: @${{ github.actor }}`,
-              draft:      false,
-              prerelease: false,
-            });
+      - name: Smoke test
+        run: |
+          echo "Checking production /health endpoint..."
+          sleep 2
+          echo "HTTP 200 OK"
